@@ -7,6 +7,7 @@
 #include <map>
 #include <algorithm>
 #include <iomanip>
+#include <stdlib.h>
 
 #include "TROOT.h"
 #include "TFile.h"
@@ -29,10 +30,35 @@
 #include "THStack.h"
 #include "TColor.h"
 
+#include "tdrstyle.C"
+#include "CMS_lumi.C"
+
+float getggRatio(const float mjj, const float met, const float mht){
+
+  TFile *file = TFile::Open(met<1?"ggHoverVBFvsMjjvsMHT.root":"ggHoverVBFvsMjjvsMET.root");
+  file->cd();
+  TH2F *htmp = (TH2F*)gDirectory->Get("hr1");
+
+
+  int binx = htmp->GetXaxis()->FindBin(met<1?mht+0.1 : met+0.1);
+  int biny = htmp->GetYaxis()->FindBin(mjj+0.1);
+
+  if (binx==0) binx=1;
+  if (binx==htmp->GetXaxis()->GetNbins()+1) binx=htmp->GetXaxis()->GetNbins();
+  if (biny==0) biny=1;
+  if (biny==htmp->GetYaxis()->GetNbins()+1) biny=htmp->GetYaxis()->GetNbins();
+
+
+  float result = htmp->GetBinContent(binx,biny);
+
+  std::cout << " Check: " << met << " " << mht << " " << mjj << " " << result << std::endl;
+
+  return result;
+}
 
 void SetHistStyle(TH1 *histPlot,const std::string & histX){
 
-  histPlot->SetFillStyle(1001);
+  /*histPlot->SetFillStyle(1001);
   histPlot->SetLineStyle(0);
   histPlot->SetMarkerStyle(20);
   histPlot->GetXaxis()->SetLabelFont(42);
@@ -51,7 +77,7 @@ void SetHistStyle(TH1 *histPlot,const std::string & histX){
   histPlot->GetZaxis()->SetLabelOffset(0.007);
   histPlot->GetZaxis()->SetLabelSize(0.05);
   histPlot->GetZaxis()->SetTitleSize(0.06);
-  histPlot->GetZaxis()->SetTitleFont(42);
+  histPlot->GetZaxis()->SetTitleFont(42);*/
   histPlot->SetTitle(histX.c_str());
 }
 
@@ -119,9 +145,18 @@ double getXS(const std::string & process){
 
 
 
-int getRegion(const int I, const std::string & prodDate, const std::string & plotbasedir, const double & mhtcut, const double & metcut, const double & mjjcut, const double & detajjcut, const double & dphijjcut, const double & ggFfrac)
+int getRegion(const int I, const std::string & prodDate, const std::string & plotbasedir, const double & mhtcut, const double & metcut, const double & mjjcut, const double & detajjcut, const double & dphijjcut, const double & ggFfrac, const bool doAllPlots=false, const unsigned doJes = 0)
 {
   double lumi = 3000;//in fb-1...
+
+  setTDRStyle();
+
+  //Set global variables for CMS style
+  writeExtraText = true;       // if extra text
+  cmsText     = "CMS Phase-2";
+  extraText  = "Simulation Preliminary";  // default extra text is "Preliminary"
+  lumi_sqrtS = "3000 fb^{-1} (14 TeV)";
+  relPosX = 0.28;
 
   std::map<std::string,unsigned> nEvtMap;
 
@@ -134,20 +169,21 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
   }
 
   const unsigned nProc = 9+12;
-  const unsigned nvar = 9;
+  const unsigned nmaxvar = 11;
+  const unsigned nvar = doAllPlots?(I>1?nmaxvar:nmaxvar-1):1;
   const unsigned nsel = 6;
   const unsigned nSamples = 29;
   const unsigned npu = 1;
 
-  //std::string histName[nvar] = {(I==3?"Mee":I==5?"Mmumu":I==2?"ele_mt":I==4?"mu_mt":"metnolep")};//,"mht30","Mjj:dphijj","Mjj:detajj"};
-  //std::string histNameShort[nvar] = {(I==3?"Mee":I==5?"Mmumu":I==2?"ele_mt":I==4?"mu_mt":"metnolep")};//,"mht30","Mjjdphijj","Mjjdetajj"};
-  //std::string binRange[nvar] = {((I==3 || I==5)?"(60,60,120)":(I==2 || I==4)?"(40,0,160)":"(60,0,600)")};//,"(120,0,1200)","(36,0,3.1416,80,1000,5000)","(60,2,8,80,1000,5000)"};
-  //std::string histLabelX[nvar] = {(I==3?";M_{ee} (GeV)":I==5?";M_{#mu#mu} (GeV)":I==2?";m_{T_{ele}} (GeV)":I==4?";m_{T_{#mu}} (GeV)":";E_{T}^{miss} (GeV)")};//,";H_{T}^{miss} (GeV)",";#Delta#phi_{jj};M_{jj}",";#Delta#eta_{jj};M_{jj}"};
+  //std::string histName[nvar] = {"metnolep","Mjj"};
+  //std::string histNameShort[nvar] = {"metnolep","Mjj"};
+  //std::string binRange[nvar] = {"(41,190,600)","(45,1500,6000)"};
+  //std::string histLabelX[nvar] = {";E_{T}^{miss} (GeV)",";M_{jj} (GeV)"};
 
-  std::string histName[nvar] = {(I==3?"Mee":I==5?"Mmumu":I==2?"ele_mt":I==4?"mu_mt":"metnolep"),"detajj" ,"mht30","dphijj","Mjj","Jet1_pt","Jet2_pt","Jet1_eta","Jet2_eta"};
-  std::string histNameShort[nvar] = {(I==3?"Mee":I==5?"Mmumu":I==2?"ele_mt":I==4?"mu_mt":"metnolep"),"detajj" ,"mht30","dphijj","Mjj","Jet1pt","Jet2pt","Jet1eta","Jet2eta"};
-  std::string binRange[nvar] = {((I==3 || I==5)?"(60,60,120)":(I==2 || I==4)?"(40,0,160)":"(60,220,600)"),"(40,4.,8.)","(38,100,2000)","(20,0,1.8)","(38,2200,6000)","(50,80,800)","(50,40,600)","(50,-5,5)","(50,-5,5)"};
-  std::string histLabelX[nvar] = {(I==3?";M_{ee} (GeV)":I==5?";M_{#mu#mu} (GeV)":I==2?";m_{T}^{ele} (GeV)":I==4?";m_{T}^{#mu} (GeV)":";E_{T}^{miss} (GeV)"),";#Delta#eta_{jj}" ,";H_{T}^{miss} (GeV)",";#Delta#phi_{jj}",";M_{jj} (GeV)",";p_{T}^{j1} (GeV)",";p_{T}^{j2} (GeV)",";#eta^{j1}",";#eta^{j2}"};
+  std::string histName[nmaxvar] = {(I==3?"Mee":I==5?"Mmumu":I==2?"ele_mt":I==4?"mu_mt":"metnolep"),"detajj" ,"mht30","dphijj","Mjj","Jet1_pt","Jet2_pt","Jet1_eta","Jet2_eta","jetmetnolepmindphi","metnolep"};
+  std::string histNameShort[nmaxvar] = {(I==3?"Mee":I==5?"Mmumu":I==2?"ele_mt":I==4?"mu_mt":"metnolep"),"detajj" ,"mht30","dphijj","Mjj","Jet1pt","Jet2pt","Jet1eta","Jet2eta","jetmetnolepmindphi","metnolep"};
+  std::string binRange[nmaxvar] = {((I==3 || I==5)?"(30,60,120)":(I==2 || I==4)?"(20,0,160)":"(20,190,600)"),"(21,4.,9.25)","(20,100,2500)","(18,0,3.24)","(20,2500,5000)","(25,80,500)","(25,40,300)","(20,-5,5)","(20,-5,5)","(15,0.5,3.1416)","(20,190,600)"};
+  std::string histLabelX[nmaxvar] = {(I==3?";M_{ee} (GeV);Events":I==5?";M_{#mu#mu} (GeV);Events":I==2?";m_{T}^{ele} (GeV);Events":I==4?";m_{T}^{#mu} (GeV);Events":";E_{T}^{miss} (GeV);Events"),";#Delta#eta_{jj};Events" ,";H_{T}^{miss} (GeV);Events",";#Delta#phi_{jj};Events",";M_{jj} (GeV);Events",";p_{T}^{j1} (GeV);Events",";p_{T}^{j2} (GeV);Events",";#eta^{j1};Events",";#eta^{j2};Events",";Min#Delta#phi(jet,E_{T}^{miss});Events",";E_{T}^{miss} (GeV);Events"};
 
   //std::string histName[nvar] = {(I==3?"Mee":I==5?"Mmumu":I==2?"ele_mt":I==4?"mu_mt":"metnolep"),((I==3 || I==2)?"ele1_pt":(I==5 || I==4)?"mu1_pt":"GenLep1_pt"),((I==3 || I==2)?"ele1_eta":(I==5 || I==4)?"mu1_eta":"GenLep1_eta")};
   //std::string binRange[nvar] = {((I==3 || I==5)?"(60,60,120)":(I==2 || I==4)?"(60,0,300)":"(100,0,600)"),"(100,0,100)","(80,-4,4)"};
@@ -158,8 +194,6 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
     "VBFH",
     "QCD_Mdijet-1000toInf",
     "ST_s-channel","ST_tch_top","ST_tW_top","ST_tW_antitop","TT",
-    "EWKWMinus2Jets","EWKWPlus2Jets",
-    "W0JetsToLNu","W1JetsToLNu","W2JetsToLNu","W3JetsToLNu",
     "EWKZ2Jets_ZToLL",
     "DYJetsToLL_M-50_HT-70to100",
     "DYJetsToLL_M-50_HT-100to200",
@@ -176,6 +210,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
     "ZJetsToNuNu_HT-600To800",
     "ZJetsToNuNu_HT-800To1200",
     "ZJetsToNuNu_HT-1200To2500",
+    "EWKWMinus2Jets","EWKWPlus2Jets",
+    "W0JetsToLNu","W1JetsToLNu","W2JetsToLNu","W3JetsToLNu"
   };
     
   std::string PU[npu] = {"200PU"};
@@ -230,7 +266,7 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
   c1->SetFrameBorderMode(0);
   c1->SetFrameFillStyle(0);
   c1->SetFrameBorderMode(0);
-  double leg_xl = 0.65, leg_xr = 0.85, leg_yb = 0.55, leg_yt = 0.85 ;
+  double leg_xl = 0.62, leg_xr = 0.948, leg_yb = 0.62, leg_yt = 0.948 ;
   TLegend* leg = new TLegend(leg_xl,leg_yb,leg_xr,leg_yt);
           
   std::ofstream Yield((plotbasedir+"/Yield_R"+Regions[I]+".txt").c_str());
@@ -266,7 +302,14 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		continue;
 	      }
 	      fin[i] = 0;
-	      fin[i] = TFile::Open(("/afs/cern.ch/work/a/amagnan/public/UPSGAna/"+prodDate+"/"+ProcessNames[i]+"_"+PU[pu]+".root").c_str());
+	      if (doJes>0 && i==0) {
+		if (doJes==1) fin[i] = TFile::Open(("/afs/cern.ch/work/a/amagnan/public/UPSGAna/"+prodDate+"/JESUP/200PU/"+ProcessNames[i]+"/HistosFile_"+ProcessNames[i]+"_"+PU[pu]+".root").c_str());
+		else if (doJes==2) fin[i] = TFile::Open(("/afs/cern.ch/work/a/amagnan/public/UPSGAna/"+prodDate+"/JESDOWN/200PU/"+ProcessNames[i]+"/HistosFile_"+ProcessNames[i]+"_"+PU[pu]+".root").c_str());
+		else fin[i] = TFile::Open(("/afs/cern.ch/work/a/amagnan/public/UPSGAna/"+prodDate+"/200PU/"+ProcessNames[i]+"/HistosFile_"+ProcessNames[i]+"_"+PU[pu]+".root").c_str());
+	      }
+	      else {
+		fin[i] = TFile::Open(("/afs/cern.ch/work/a/amagnan/public/UPSGAna/"+prodDate+"/"+ProcessNames[i]+"_"+PU[pu]+".root").c_str());
+	      }
 	      //try second option if already merged
 	      //if (!fin[i]) fin[i] = TFile::Open(("/afs/cern.ch/work/a/amagnan/public/UPSGAna/"+prodDate+"/"+ProcessNames[i]+"_"+PU[pu]+"/HistosFile_"+ProcessNames[i]+"_"+PU[pu]+".root").c_str());
 	      if (!fin[i]) {
@@ -274,7 +317,9 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 	      }
 	      fin[i]->GetObject("LightTree",LightTree);
 	      if (LightTree!=NULL){
-		
+
+		//std::cout << LightTree << " " << LightTree->GetEntries() << std::endl;
+
 		//if (variable==0) std::cout << " Nevts = " << nEvtMap[ProcessNames[i]] << std::endl;
 		
 		double weight = getXS(ProcessNames[i])*lumi*1000/nEvtMap[ProcessNames[i]];
@@ -306,7 +351,7 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		    if (!do2D){
 		      dataPlot->SetLineColor(kBlack);
 		      double integral = dataPlot->Integral(0,dataPlot->GetNbinsX()+1);
-		      if (variable==0 && pu==0) leg->AddEntry(dataPlot,"Signal","LP");
+		      if (variable==0 && pu==0) leg->AddEntry(dataPlot,"VBF H(125)","L");
 		      std::cout << " Check yield: " 
 			//<< 1.0*weight*LightTree->GetEntries(selection[I].c_str()) << " " 
 				<< dataPlot->Integral() << " " << integral << std::endl;
@@ -316,6 +361,7 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 			Process_Yields_err[VBFH]+= eff*(1-eff)*nEvtMap[ProcessNames[i]]*weight*weight;
 		      }
 		    }
+		    if (doJes>0) return 1;
 		  }
 		else
 		  {
@@ -360,8 +406,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 						 << std::endl;
 		      
 		      if (ProcessNames[i].find("QCD")!=ProcessNames[i].npos){
-			histPlot->SetFillColor(kPink);
-			histPlot->SetLineColor(kPink);
+			histPlot->SetFillColor(kYellow);
+			histPlot->SetLineColor(kYellow);
 			if (variable==0 && pu==0) leg->AddEntry(histPlot,"QCD","F");
 			if (variable==0) {
 			  Process_Yields[QCD]+= integral;
@@ -371,8 +417,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		      
 		      else if (ProcessNames[i].find("EWKZ2Jets_ZToLL")!=ProcessNames[i].npos){
 			histPlot->SetFillColor(TColor::GetColor("#91ABC4"));
-			histPlot->SetLineColor(kBlack);
-			if (variable==0 && pu==0) leg->AddEntry(histPlot,"EWK Zll","F");
+			histPlot->SetLineColor(TColor::GetColor("#91ABC4"));
+			if (variable==0 && pu==0 && I!=1) leg->AddEntry(histPlot,"EWK Zll","F");
 			if (variable==0) {
 			  Process_Yields[EWK_Zll]+= integral;
 			  Process_Yields[EWKZee] += weight*yee;
@@ -388,8 +434,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		      
 		      else if (ProcessNames[i].find("DYJetsToLL")!=ProcessNames[i].npos){
 			histPlot->SetFillColor(TColor::GetColor("#9A9EAB"));
-			histPlot->SetLineColor(kBlack);
-			if (ProcessNames[i].find("HT-70")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"QCD Zll","F");
+			histPlot->SetLineColor(TColor::GetColor("#9A9EAB"));
+			if (ProcessNames[i].find("HT-70")!=ProcessNames[i].npos && variable==0 && pu==0 && I!=1) leg->AddEntry(histPlot,"QCD Zll","F");
 			if (variable==0) {
 			  Process_Yields[QCD_Zll]+= integral;
 			  Process_Yields[QCDZee] += weight*yee;
@@ -405,7 +451,7 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		      
 		      else if (ProcessNames[i].find("ST")!=ProcessNames[i].npos || ProcessNames[i].find("TT")!=ProcessNames[i].npos){
 			histPlot->SetFillColor(TColor::GetColor("#CF3721"));
-			histPlot->SetLineColor(kBlack);
+			histPlot->SetLineColor(TColor::GetColor("#CF3721"));
 			if (ProcessNames[i].find("ST_s-channel")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"Top","F");
 			if (variable==0) {
 			  Process_Yields[Top]+= integral;
@@ -415,8 +461,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		      
 		      else if (ProcessNames[i].find("EWKW")!=ProcessNames[i].npos){
 			histPlot->SetFillColor(TColor::GetColor("#0066CC"));
-			histPlot->SetLineColor(kBlack);
-			if (ProcessNames[i].find("Plus")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"EWK W+jets->lnu","F");
+			histPlot->SetLineColor(TColor::GetColor("#0066CC"));
+			if (ProcessNames[i].find("Plus")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"EWK W+jets#rightarrow l#nu","F");
 			if (variable==0) {
 			  Process_Yields[EWK_W_lnu]+= integral;
 			  Process_Yields[EWKWenu] += weight*yenu;
@@ -430,8 +476,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		      }
 		      else if (ProcessNames[i].find("EWKZ2Jets_ZToNuNu")!=ProcessNames[i].npos){
 			histPlot->SetFillColor(TColor::GetColor("#00CCCC"));
-			histPlot->SetLineColor(kBlack);
-			if (variable==0 && pu==0) leg->AddEntry(histPlot,"EWK Z->nunu","F");
+			histPlot->SetLineColor(TColor::GetColor("#00CCCC"));
+			if (variable==0 && pu==0) leg->AddEntry(histPlot,"EWK Z#rightarrow#nu#nu","F");
 			if (variable==0) {
 			  Process_Yields[EWK_Z_nunu]+= integral;
 			  Process_Yields_err[EWK_Z_nunu]+= interrsq;
@@ -439,8 +485,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		      }
 		      else if (ProcessNames[i].find("JetsToLNu")!=ProcessNames[i].npos){
 			histPlot->SetFillColor(TColor::GetColor("#E19D07"));
-			histPlot->SetLineColor(kBlack);
-			if (ProcessNames[i].find("0JetsToLNu")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"QCD W+jets->lnu","F");
+			histPlot->SetLineColor(TColor::GetColor("#E19D07"));
+			if (ProcessNames[i].find("0JetsToLNu")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"QCD W+jets#rightarrow l#nu","F");
 			if (variable==0) {
 			  Process_Yields[QCD_W_lnu]+= integral;
 			  Process_Yields[QCDWenu] += weight*yenu;
@@ -454,8 +500,8 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
 		      }
 		      else if (ProcessNames[i].find("ZJetsToNuNu")!=ProcessNames[i].npos){
 			histPlot->SetFillColor(TColor::GetColor("#4D975D"));
-			histPlot->SetLineColor(kBlack);
-			if (ProcessNames[i].find("100To200")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"QCD Z->nunu","F");
+			histPlot->SetLineColor(TColor::GetColor("#4D975D"));
+			if (ProcessNames[i].find("100To200")!=ProcessNames[i].npos && variable==0 && pu==0) leg->AddEntry(histPlot,"QCD Z#rightarrow#nu#nu","F");
 			if (variable==0) {
 			  Process_Yields[QCD_Z_nunu]+= integral;
 			  Process_Yields_err[QCD_Z_nunu]+= interrsq;
@@ -480,46 +526,52 @@ int getRegion(const int I, const std::string & prodDate, const std::string & plo
                     
 		  }//if bkg
 	      }//ifLT exists
-	      
+	      else {
+		std::cout << "LightTree not found !" << std::endl;
+	      }
 	    }//loop on samples
 	  
 	  if (!dataPlot || (!do2D && !A)) return 1;
           
 	  if (!do2D){
-	    dataPlot->SetFillColor(kBlack);
+	    //dataPlot->SetFillColor(kBlack);
 	    dataPlot->SetLineColor(kBlack);
+	    dataPlot->SetLineWidth(3);
 	    dataPlot->SetFillStyle(0);
-	    dataPlot->SetMarkerStyle(20);
+	    //dataPlot->SetMarkerStyle(20);
 	    
 	    SetHistStyle(dataPlot,histLabelX[variable]);
 	    
 	    //dataPlot->Draw("e1 goff");
-	    //A->GetYaxis()->SetRangeUser(0,1.1*A->GetMaximum());
 	    c1->Clear();
 	    c1->cd();
 	    A->Draw("hist goff");
 	    SetHistStyle((TH1*)A->GetHistogram(),histLabelX[variable]);
+	    if (histName[variable].find("jetmetnolepmindphi")!=histName[variable].npos) ((TH1*)A->GetHistogram())->GetYaxis()->SetRangeUser(0,9500);
 	    
-	    dataPlot->Draw("same e1 goff");
+	    dataPlot->Draw("same hist goff");
 	    gPad->RedrawAxis();
 	    leg->Draw("goff");
 	    
-	    char buf[100];
-	    sprintf(buf,"%3.1f  fb^{-1} (14 TeV)",lumi);
+	    CMS_lumi(c1,0,0);
+
+
+	    /*char buf[100];
+	    sprintf(buf,"%3.0f  fb^{-1} (14 TeV)",lumi);
 	    
 	    TLatex *   tex = new TLatex(0.95,0.96,buf);
 	    tex->SetNDC();
 	    tex->SetTextAlign(31);
-	    tex->SetTextFont(42);
-	    tex->SetTextSize(0.03);
+	    //tex->SetTextFont(42);
+	    tex->SetTextSize(0.035);
 	    tex->SetLineWidth(2);
 	    tex->Draw("goff");
 	    tex = new TLatex(0.15,0.96,("CMS Delphes Simulation "+PU[pu]).c_str());
 	    tex->SetNDC();
-	    tex->SetTextFont(52);
-	    tex->SetTextSize(0.0285);
+	    //tex->SetTextFont(52);
+	    tex->SetTextSize(0.035);
 	    tex->SetLineWidth(2);
-	    tex->Draw("goff");
+	    tex->Draw("goff");*/
 	  }
 
 	  outfile->cd();
@@ -836,7 +888,9 @@ int plotterDelphes(){
 
   int errcode=0;
 
-  std::string prodDate = "180809";
+  std::string prodDate = "180809";//default
+  //std::string prodDate = "180917";//smear45%
+  //std::string prodDate = "181008";//run2 MET
   std::ostringstream plotbasedir;
 
   //plotbasedir = "Mjj1000deta4mht170dphi18";
@@ -845,27 +899,41 @@ int plotterDelphes(){
   //errcode=getRegion(regions,prodDate,plotbasedir,170,0,1000,4,1.8,0.3);
   //}
   const unsigned nMet = 1;
-  //int met[nMet]={130,150,170,180,190,200,210,220,250,300};
-  int met[nMet]={220};
-  const unsigned nMht = 5;
-  int mht[nMht]={160,200,250,300,350};
-  const unsigned nMjj = 1;
-  //int mjj[nMjj] = {2200,2300,2400,2500};
-  int mjj[nMjj] = {2200};
-  //int mjj[nMjj] = {1300,1400,1500};
+  //int met[nMet]={150,180,190,200,210,220,250,300,350,400};
+  //int met[nMet]={360,380};
+  int met[nMet]={190};
+  const unsigned nMht = 1;
+  //int mht[nMht]={160,200,250,300,350};
+  //int mht[nMht]={160,200,300,400,500,600,700,800};
+  int mht[nMht]={100};
+  const unsigned nMjj = 1;//16;
+  int mjj[nMjj] = {2500};
+  //int mjj[nMjj] = {
+  //1000,1500,
+  //2000,2200,2400,2500,2600,2800,
+  //3000,3500,
+  //4000};
+
+
+
   for (unsigned im(0); im<nMet;++im){//loop on met
-    //for (int im(0); im<nMht;++im){//loop on mht
-    for (unsigned jm(0); jm<nMjj; ++jm){//loop on mjj
-      //if (met[im]!=150 && met[im]!=170 && met[im]!=210 && mjj[jm]<1850) continue;
-      plotbasedir.str("");
-      plotbasedir << "Mjj" << mjj[jm] << "deta4met" << met[im] << "dphi18mht100";
+    for (unsigned in(0); in<nMht;++in){//loop on mht
+      for (unsigned jm(0); jm<nMjj; ++jm){//loop on mjj
+	//if (met[im]!=150 && met[im]!=170 && met[im]!=210 && mjj[jm]<1850) continue;
+	plotbasedir.str("");
+	plotbasedir << "Mjj" << mjj[jm] << "deta4met" << met[im] << "dphi18mht" << mht[in];
       //plotbasedir << "Mjj" << mjj[jm] << "deta4met0dphi18mht" << mht[im];
       //ggF fraction = 0.25
-      for (int regions = 1; regions<6; regions++){
-	errcode=getRegion(regions,prodDate,plotbasedir.str(),100,met[im],mjj[jm],4,1.8,0.25);
-	//errcode=getRegion(regions,prodDate,plotbasedir.str(),mht[im],0,mjj[jm],4,1.8,0.25);
-      }
-    }//loop on mjj
+	if (system(("./prepareDirs.sh "+plotbasedir.str()).c_str())) return 1;
+
+	float ggRatio = getggRatio(mjj[jm],met[im],mht[in]);
+	std::cout << " ggRatio: " << ggRatio << std::endl;
+	for (int regions = 1; regions<2; regions++){
+	  errcode=getRegion(regions,prodDate,plotbasedir.str(),mht[in],met[im],mjj[jm],4,1.8,ggRatio,true);
+	}
+
+      }//loop on mjj
+    }//loop on mht
   }//loop on met
   
   return errcode;

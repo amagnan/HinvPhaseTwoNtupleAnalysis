@@ -29,19 +29,19 @@
 #include "THStack.h"
 #include "TColor.h"
 
-float getggRatio(const float mjj, const float met){
+float getggRatio(const float mjj, const float met, const float mht){
 
-  TFile *file = TFile::Open("ggHoverVBFvsMjjvsMHT.root");
+  TFile *file = TFile::Open(met<1?"ggHoverVBFvsMjjvsMHT.root":"ggHoverVBFvsMjjvsMET.root");
   file->cd();
   TH2F *htmp = (TH2F*)gDirectory->Get("hr1");
 
 
-  int binx = htmp->GetXaxis()->FindBin(met+0.1);
+  int binx = htmp->GetXaxis()->FindBin(met<1?mht+0.1 : met+0.1);
   int biny = htmp->GetYaxis()->FindBin(mjj+0.1);
 
   float result = htmp->GetBinContent(binx,biny);
 
-  std::cout << " Check: " << met << " " << mjj << " " << result << std::endl;
+  std::cout << " Check: " << met << " " << mht << " " << mjj << " " << result << std::endl;
 
   return result;
 }

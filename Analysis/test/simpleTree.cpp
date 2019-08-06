@@ -251,8 +251,13 @@ int makeTree(const std::string & baseDir,
 	     const std::string & plotDir,
 	     const std::string & aProcess,
 	     const std::string & pu,
-	     int & nEvtsToProc){//main
-  
+	     int & nEvtsToProc,
+	     const int & nSigmaJes,
+	     const double & jesVal,
+	     const double & metOffset,
+	     const double & metSmearFact,
+	     const double & fakemet){//main
+
   TRandom3 rand(0);
 
   bool isPU = pu.find("no")==pu.npos;
@@ -688,6 +693,62 @@ int makeTree(const std::string & baseDir,
     jetmetnolepmindphi = 0;
     
     Jets->GetEntry(ievt);
+    MissingET->GetEntry(ievt);
+
+    double jecxSum = 0;
+    double jecySum = 0;
+
+    std::vector<double> jetspTmod;
+    std::vector<unsigned> idxNew;
+    for (unsigned ij(0); ij<abs(nJets);++ij){
+      idxNew.push_back(ij);
+    }
+    if(nSigmaJes!=0) {
+      //modify jetmet with JES if applying
+      for (unsigned ij(0); ij<abs(nJets);++ij){
+	TLorentzVector oldjet;
+	oldjet.SetPtEtaPhiM(jet_pt[ij],jet_eta[ij],jet_phi[ij],jet_mass[ij]);
+	TLorentzVector newjet;
+	newjet = oldjet*(1+nSigmaJes*jesVal);
+	
+	jetspTmod.push_back(newjet.Pt());
+	jet_pt[ij] = newjet.Pt();
+	jet_eta[ij] = newjet.Eta();
+	jet_phi[ij] = newjet.Phi();
+	jet_mass[ij] = newjet.M();
+
+	jecxSum += oldjet.Px()-newjet.Px();
+	jecySum += oldjet.Py()-newjet.Py();
+	
+      }
+      
+      jecxSum += metpf*cos(metphipf);
+      jecySum += metpf*sin(metphipf);
+      metpf = sqrt(jecxSum*jecxSum+jecySum*jecySum);
+      metphipf = acos(jecxSum/metpf);
+      if (jecxSum<0){
+	if (jecySum<0) metphipf*=-1.;
+      } else {
+	if (jecySum<0) metphipf*=-1.;
+      }
+
+      std::sort(idxNew.begin(),idxNew.end(),[&](unsigned i,unsigned j){return jetspTmod[i]>jetspTmod[j];} );
+
+      //for (unsigned ij(0); ij<abs(nJets);++ij){
+      //std::cout << " Old " << idxNew[ij] << " new " << ij 
+      // << " pT " << jet_pt[idxNew[ij]]
+      //<< std::endl;
+      //}
+    }
+    if (fakemet>0){
+      double gausSmear = rand.Gaus(fakemet,fakemet);
+      metpf = metpf - std::max(0.,gausSmear);
+    }
+    if (metSmearFact>0){
+      double gausSmear = rand.Gaus(metpf,metSmearFact*metpf);
+      metpf = metOffset + gausSmear;
+    }
+
     ElectronLoose->GetEntry(ievt);
     ElectronMedium->GetEntry(ievt);
     MuonLoose->GetEntry(ievt);
@@ -756,25 +817,25 @@ int makeTree(const std::string & baseDir,
     unsigned nJetsSel = 0;
     unsigned idSel[abs(nJets)];
     for (unsigned ij(0); ij<abs(nJets);++ij){
-      rejectJet[ij] = false;
+      rejectJet[idxNew[ij]] = false;
       TLorentzVector jet;
-      jet.SetPtEtaPhiM(jet_pt[ij],jet_eta[ij],jet_phi[ij],jet_mass[ij]);
+      jet.SetPtEtaPhiM(jet_pt[idxNew[ij]],jet_eta[idxNew[ij]],jet_phi[idxNew[ij]],jet_mass[idxNew[ij]]);
       for (unsigned il(0); il<abs(nMediumEle);++il){
 	if (rejectEle[il]) continue;
 	TLorentzVector elevec ;
 	elevec.SetPtEtaPhiM(mediumEle_pt[il],mediumEle_eta[il],mediumEle_phi[il],mediumEle_mass[il]);
 	double dR = jet.DeltaR(elevec);
-	if (dR<0.4) rejectJet[ij] = true;
+	if (dR<0.4) rejectJet[idxNew[ij]] = true;
       }
       for (unsigned il(0); il<abs(nTightMu);++il){
 	if (rejectMu[il]) continue;
 	TLorentzVector muvec ;
 	muvec.SetPtEtaPhiM(tightMu_pt[il],tightMu_eta[il],tightMu_phi[il],tightMu_mass[il]);
 	double dR = jet.DeltaR(muvec);
-	if (dR<0.4) rejectJet[ij] = true;
+	if (dR<0.4) rejectJet[idxNew[ij]] = true;
       }
-      if (!rejectJet[ij]){
-	idSel[nJetsSel] = ij;
+      if (!rejectJet[idxNew[ij]]){
+	idSel[nJetsSel] = idxNew[ij];
 	nJetsSel++;
       }
     }
@@ -833,7 +894,6 @@ int makeTree(const std::string & baseDir,
 
     Event->GetEntry(ievt);
     GenJet->GetEntry(ievt);
-    MissingET->GetEntry(ievt);
     ElectronTight->GetEntry(ievt);
     PhotonLoose->GetEntry(ievt);
     PhotonTight->GetEntry(ievt);
@@ -893,13 +953,13 @@ int makeTree(const std::string & baseDir,
     }
 
     //met and jets
-    TLorentzVector metvec;
     TLorentzVector mhtvec;
     mhtvec.SetPtEtaPhiE(0,0,0,0);
     TLorentzVector mht30vec;
     mht30vec.SetPtEtaPhiE(0,0,0,0);
-
+    TLorentzVector metvec;
     metvec.SetPtEtaPhiE(metpf,0,metphipf,metpf);
+
     if (ntightEle==1) ele_mt = sqrt(2*mediumEle_pt[ele1]*metpf*(1-cos(mediumEle_phi[ele1]-metphipf)));
     if (nlooseEle==2 && ntightEle>=1){
       TLorentzVector ele1vec ;
@@ -939,12 +999,12 @@ int makeTree(const std::string & baseDir,
     ntightbjets = 0;
     ht30 = 0;
     for (unsigned ij(0); ij<abs(nJets);++ij){
-      if (rejectJet[ij]) continue;
+      if (rejectJet[idxNew[ij]]) continue;
       //redo jet-genjet matching
       TLorentzVector rec;
-      rec.SetPtEtaPhiM(jet_pt[ij],jet_eta[ij],jet_phi[ij],jet_mass[ij]);
+      rec.SetPtEtaPhiM(jet_pt[idxNew[ij]],jet_eta[idxNew[ij]],jet_phi[idxNew[ij]],jet_mass[idxNew[ij]]);
       double mindr = 1000;
-      int saveGenIdx = jet_genidx[ij];
+      int saveGenIdx = jet_genidx[idxNew[ij]];
       int newGenIdx = -1;
       for (unsigned igj(0); igj<abs(nGenJets);++igj){
 	TLorentzVector gen;
@@ -958,35 +1018,35 @@ int makeTree(const std::string & baseDir,
       if (newGenIdx!=saveGenIdx && saveGenIdx>=0){
 	//std::cout << " *** Found different index ! nGenJets=" << nGenJets << " nJets=" << nJets << " jet " << ij << " original index " << saveGenIdx << " new index " << newGenIdx << std::endl;
 	nDiffIdx++;
-	jet_genidx[ij] = newGenIdx;
+	jet_genidx[idxNew[ij]] = newGenIdx;
       }
-      if (jet_genidx[ij]>=0){
-	unsigned genidx = abs(jet_genidx[ij]);
-	if (ij==0) {
+      if (jet_genidx[idxNew[ij]]>=0){
+	unsigned genidx = abs(jet_genidx[idxNew[ij]]);
+	if (ij==idxNew[0]) {
 	  Jet1_genjetDR = mindr;
-	  Jet1_JES = jet_pt[ij]/genjet_pt[genidx];
+	  Jet1_JES = jet_pt[idxNew[ij]]/genjet_pt[genidx];
 	}
-	else if (ij==1){
+	else if (ij==idxNew[1]){
 	  Jet2_genjetDR = mindr;
-	  Jet2_JES = jet_pt[ij]/genjet_pt[genidx];
+	  Jet2_JES = jet_pt[idxNew[ij]]/genjet_pt[genidx];
 	}
       }
 
       mhtvec += rec;
-      if (jet_pt[ij]>20 && fabs(jet_eta[ij])<3.0 && (jet_DeepCSV[ij] & 0b001000)) nloosebjets++;
-      if (jet_pt[ij]>20 && fabs(jet_eta[ij])<3.0 && (jet_DeepCSV[ij] & 0b010000)) nmediumbjets++;
-      if (jet_pt[ij]>20 && fabs(jet_eta[ij])<3.0 && (jet_DeepCSV[ij] & 0b100000)) ntightbjets++;
+      if (jet_pt[idxNew[ij]]>20 && fabs(jet_eta[idxNew[ij]])<3.0 && (jet_DeepCSV[idxNew[ij]] & 0b001000)) nloosebjets++;
+      if (jet_pt[idxNew[ij]]>20 && fabs(jet_eta[idxNew[ij]])<3.0 && (jet_DeepCSV[idxNew[ij]] & 0b010000)) nmediumbjets++;
+      if (jet_pt[idxNew[ij]]>20 && fabs(jet_eta[idxNew[ij]])<3.0 && (jet_DeepCSV[idxNew[ij]] & 0b100000)) ntightbjets++;
 
       //add fake taus
-      if (jet_pt[ij]>20 && fabs(jet_eta[ij])<3.0 && jet_tauweight[ij]<1) {
+      if (jet_pt[idxNew[ij]]>20 && fabs(jet_eta[idxNew[ij]])<3.0 && jet_tauweight[idxNew[ij]]<1) {
 	double passId = rand.Rndm();
 	if (passId < 0.03) ntaus++;
       }
 
-      if (jet_pt[ij]<30) continue;
+      if (jet_pt[idxNew[ij]]<30) continue;
       mht30vec += rec;
       njets30++;
-      ht30 += jet_pt[ij];
+      ht30 += jet_pt[idxNew[ij]];
       if (njets30>4) continue;
       
       double dphi = fabs(rec.DeltaPhi(metvec));
@@ -1056,9 +1116,9 @@ int makeTree(const std::string & baseDir,
 
 int main(int argc, char** argv){//main
 
-  if (argc!=6) {
+  if (argc<6) {
     std::cout << " Usage: "
-	      << argv[0] << " <outputDirName> <process short name> <pu: noPU or PU200> <filelist dir> <eventsToProc>"
+	      << argv[0] << " <outputDirName> <process short name> <pu: noPU or PU200> <filelist dir> <eventsToProc> <optional: nsigmaJes>"
 	      << std::endl;
     return 1;
   }
@@ -1069,7 +1129,14 @@ int main(int argc, char** argv){//main
 
   int nEvtsToProc = atoi(argv[5]);
 
-  makeTree(lListDir,lPlotDir,lProcess,lPu,nEvtsToProc);
+  int nSigmaJes = argc>6 ? atoi(argv[6]) : 0;
+  double jesVal = 0.01;
+
+  double metoffset = 0;//100;
+  double metsmearfact = 0.45;//0.45;
+  double fakemet = 30.;//0.45;
+
+  makeTree(lListDir,lPlotDir,lProcess,lPu,nEvtsToProc,nSigmaJes,jesVal,metoffset,metsmearfact,fakemet);
 
   return 0;
 

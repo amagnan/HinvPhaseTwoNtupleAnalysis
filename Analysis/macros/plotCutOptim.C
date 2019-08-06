@@ -39,16 +39,18 @@ int plotCutOptim(){
   //std::string histo = "dphijj";
   //std::string histo = "detajj";
   //std::string histo = "Mjj";
-  //std::string histo = "Jet1_pt";
-  //std::string histo = "Jet2_pt";
+  //std::string histo = "Jet1pt";
+  //std::string histo = "Jet2pt";
+  //std::string histo = "jetmetnolepmindphi";
   bool do2D = histo.find("Mjjd")!=histo.npos;
 
   //std::string plotSuf = "_MjjdetajjCheck";
   //std::string plotSuf = "_mhtTuning";
-  std::string plotSuf = "_metmhtCheck";
+  std::string plotSuf = "_lastCheck";
+  //std::string plotSuf = "_metmhtCheck";
 
-  unsigned ngrid = histo.find("metnolep")!=histo.npos ||histo.find("mht30")!=histo.npos  ? 30:histo.find("Mjj")!=histo.npos ? 40 : histo.find("dphi")!=histo.npos ? 36 : 30;
-  TFile *fin = TFile::Open("Mjj1300deta4met0dphi18mht250/plots0e0mu.root");
+  unsigned ngrid = histo.find("metnolep")!=histo.npos ||histo.find("mht30")!=histo.npos  ? 20:histo.find("Mjj")!=histo.npos ? 25 : histo.find("dphi")!=histo.npos ? 18 : 20;
+  TFile *fin = TFile::Open("Mjj2500deta4met190dphi18mht100/plots0e0mu.root");
   if (!fin) return 1;
   else {
     std::cout << " File found: pointer " << fin << std::endl << std::flush;
@@ -99,6 +101,7 @@ int plotCutOptim(){
     myc->cd();
     //den->Rebin(5);
     den->SetLineColor(1);
+    den->SetFillColor(0);
     den->SetMarkerColor(1);
     den->SetMarkerStyle(22);
     den->GetXaxis()->SetNdivisions(505);
@@ -195,12 +198,14 @@ int plotCutOptim(){
   }
 
   if (!do2D){
-    ratio->SetMaximum(maxR*1.1);
+    ratio->SetMaximum(std::max(maxS,maxR)*1.1);
     ratio->GetYaxis()->SetTitle("Asimov sig.");
+    //ratio->GetXaxis()->SetTitle("min#Delta#phi(jet,E_{T}^{miss})");
     ratio->SetTitle("");
     ratio->SetLineColor(3);
     ratio->SetFillColor(5);
     ratio->GetXaxis()->SetNdivisions(510);
+    ratioS->Draw("PE");
     ratio->Draw("hist");
     
     ratioS->SetLineColor(2);
@@ -227,6 +232,12 @@ int plotCutOptim(){
     ratio2D->SetTitle("");
     ratio2D->Draw("colz"); 
   }
+
+  TLegend *leg = new TLegend(0.6,0.75,0.9,0.9);
+  leg->SetFillColor(10);
+  leg->AddEntry(ratio,"Asimov sig.","F");
+  leg->AddEntry(ratioS,"S/#sqrt{B}","P");
+  leg->Draw("same");
 
   mycR->Update();
   mycR->Print(("OPTIM/AsimovSig"+histo+plotSuf+".pdf").c_str());

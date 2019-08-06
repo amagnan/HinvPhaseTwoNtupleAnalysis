@@ -17,8 +17,8 @@ parser.add_option('-S', '--no-submit'   ,    action="store_true",  dest='nosubmi
 
 pulist = ['200PU']
 
-#inputlistdir = 'filelists/180807/split/'
-inputlistdir = 'filelists/180809/'
+inputlistdir = 'filelists/180809/split/'
+#inputlistdir = 'filelists/180809/'
 
 runDir=os.getcwd()
 

@@ -24,7 +24,7 @@ parser.add_option('-S', '--no-submit',action="store_true",  dest='nosubmit', hel
 
 
 #pulist = ['noPU','PU200']
-pulist = ['PU200']
+pulist = ['200PU']
 
 for pu in pulist :
 
@@ -45,9 +45,11 @@ for pu in pulist :
         scriptFile.write('cd /afs/cern.ch/work/a/amagnan/CMSSW_9_3_5/src/\n')
         scriptFile.write('cmsenv\n')
         scriptFile.write('cd -\n')
-        scriptFile.write('cp -r %s/%s .\n'%(os.getcwd(),opt.filelist))
+        scriptFile.write('mkdir -p %s\n'%(opt.filelist))
+        scriptFile.write('cp %s/%s/* %s/\n'%(os.getcwd(),opt.filelist,opt.filelist))
+        scriptFile.write('ls *\n')
     #os.system('./bin/simpleTree %s %s'%(outDir,myproc))
-        scriptFile.write('%s/bin/simpleTree %s %s %s %s %d | tee %s/runJob.log\n'%(os.getcwd(),outDir,myproc,pu,opt.filelist,opt.numEvts,outDir))
+        scriptFile.write('%s/bin/simpleTree %s %s %s %s %d 1 | tee %s/runJob.log\n'%(os.getcwd(),outDir,myproc,pu,opt.filelist,opt.numEvts,outDir))
         scriptFile.write('echo "All done"\n')
         scriptFile.close()
  
